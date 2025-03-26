@@ -30,3 +30,21 @@ A serverless dashboard for monitoring and optimizing AWS costs.
 
 ```bash
 ./src/scripts/deploy.sh [environment] [region]
+
+
+## Final Notes
+1. Cost Considerations:
+-Athena charges per query - optimize queries
+-QuickSight has its own pricing model
+-S3 costs are minimal for cost data
+2. Permissions Required:
+-Cost Explorer read access
+-QuickSight admin access for dashboard creation
+-Lambda execution roles
+3. Enhancements:
+-Add anomaly detection
+-Implement custom recommendations engine
+-Add Slack/email alerts for cost spikes
+-Integrate with AWS Budgets
+
+This implementation provides a complete serverless solution for AWS cost monitoring and optimization with automated data collection, processing, and visualization.
