@@ -22,16 +22,6 @@ A serverless dashboard for monitoring and optimizing AWS costs.
 4. **Athena** - SQL queries on cost data
 5. **QuickSight** - Visualization and dashboards
 
-## Deployment
-
-1. Clone this repository
-2. Configure AWS credentials with appropriate permissions
-3. Run deployment script:
-
-```bash
-./src/scripts/deploy.sh [environment] [region]
-
-
 ## Final Notes
 1. Cost Considerations:
 -Athena charges per query - optimize queries
@@ -48,3 +38,14 @@ A serverless dashboard for monitoring and optimizing AWS costs.
 -Integrate with AWS Budgets
 
 This implementation provides a complete serverless solution for AWS cost monitoring and optimization with automated data collection, processing, and visualization.
+
+## Deployment
+
+1. Clone this repository
+2. Configure AWS credentials with appropriate permissions
+3. Run deployment script:
+
+```bash
+./src/scripts/deploy.sh [environment] [region]
+
+
