@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cost data collection and processing pipeline
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+  CostBucketName:
+    Type: String
+    Default: aws-cost-data-${AWS::AccountId}
+
+Resources:
+  # S3 Bucket for cost data
+  CostDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref CostBucketName
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireAfter30Days
+            Status: Enabled
+            ExpirationInDays: 30
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # Lambda function to fetch cost data
+  CostExplorerFetcher:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "cost-explorer-fetcher-${EnvironmentName}"
+      Runtime: python3.9
+      Handler: app.lambda_handler
+      Code:
+        S3Bucket: !Sub "${AWS::AccountId}-lambda-deployments"
+        S3Key: !Sub "cost-explorer-fetcher-${EnvironmentName}.zip"
+      Timeout: 300
+      MemorySize: 256
+      Role: !GetAtt CostExplorerLambdaRole.Arn
+      Environment:
+        Variables:
+          COST_BUCKET: !Ref CostBucketName
+          ATHENA_DATABASE: !Sub "aws_costs_${EnvironmentName}"
+          ATHENA_TABLE: !Sub "daily_costs_${EnvironmentName}"
+
+  # IAM Role for Lambda
+  CostExplorerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "cost-explorer-lambda-role-${EnvironmentName}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "cost-explorer-access-${EnvironmentName}"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - ce:GetSavingsPlansUtilization
+                  - ce:GetReservationUtilization
+                  - ce:GetReservationCoverage
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${CostBucketName}/*"
+              - Effect: Allow
+                Action:
+                  - athena:StartQueryExecution
+                  - athena:GetQueryResults
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - glue:GetTable
+                  - glue:GetDatabase
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  # EventBridge Rule to trigger daily
+  DailyCostCollectionRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "daily-cost-collection-${EnvironmentName}"
+      ScheduleExpression: "cron(0 8 * * ? *)"  # 8 AM UTC daily
+      Targets:
+        - Arn: !GetAtt CostExplorerFetcher.Arn
+          Id: "CostExplorerFetcher"
+
+Outputs:
+  CostBucketName:
+    Description: Name of the S3 bucket for cost data
+    Value: !Ref CostBucketName
+  CostExplorerLambdaArn:
+    Description: ARN of the cost explorer lambda function
+    Value: !GetAtt CostExplorerFetcher.Arn

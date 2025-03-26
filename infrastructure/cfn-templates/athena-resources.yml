@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Athena resources for cost data analysis
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+  CostBucketName:
+    Type: String
+
+Resources:
+  # Glue Database
+  CostDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      DatabaseInput:
+        Name: !Sub "aws_costs_${EnvironmentName}"
+        Description: "Database for AWS cost analysis"
+
+  # Glue Table for daily costs
+  DailyCostsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      DatabaseName: !Ref CostDatabase
+      CatalogId: !Ref AWS::AccountId
+      TableInput:
+        Name: !Sub "daily_costs_${EnvironmentName}"
+        Description: "Daily AWS costs by service"
+        TableType: "EXTERNAL_TABLE"
+        Parameters: {
+          "classification": "csv",
+          "skip.header.line.count": "1"
+        }
+        StorageDescriptor:
+          Location: !Sub "s3://${CostBucketName}/athena/daily_costs/"
+          InputFormat: "org.apache.hadoop.mapred.TextInputFormat"
+          OutputFormat: "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+          SerdeInfo:
+            SerializationLibrary: "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"
+            Parameters: {
+              "field.delim": ","
+            }
+          Columns:
+            - Name: "date"
+              Type: "date"
+            - Name: "service"
+              Type: "string"
+            - Name: "region"
+              Type: "string"
+            - Name: "cost"
+              Type: "double"
+            - Name: "usage"
+              Type: "double"
+
+  # Athena Named Query for common queries
+  ServiceBreakdownQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: !Sub "service_breakdown_${EnvironmentName}"
+      Database: !Ref CostDatabase
+      QueryString: |
+        SELECT service, SUM(cost) as total_cost
+        FROM daily_costs
+        WHERE date BETWEEN date('now') - interval '30' day AND date('now')
+        GROUP BY service
+        ORDER BY total_cost DESC
+
+Outputs:
+  AthenaDatabaseName:
+    Description: Name of the Athena database
+    Value: !Ref CostDatabase
+    Export:
+      Name: !Sub "${EnvironmentName}-AthenaCostDatabase"

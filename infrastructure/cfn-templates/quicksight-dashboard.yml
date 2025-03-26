@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: QuickSight resources for cost dashboard
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+  AthenaDatabaseName:
+    Type: String
+  AthenaTableName:
+    Type: String
+  QuickSightUserArn:
+    Type: String
+
+Resources:
+  # QuickSight Data Source
+  CostDataSource:
+    Type: AWS::QuickSight::DataSource
+    Properties:
+      AwsAccountId: !Ref AWS::AccountId
+      DataSourceId: !Sub "aws-cost-data-${EnvironmentName}"
+      Name: !Sub "AWS Cost Data ${EnvironmentName}"
+      Type: ATHENA
+      DataSourceParameters:
+        AthenaParameters:
+          WorkGroup: primary
+      Permissions:
+        - Principal: !Ref QuickSightUserArn
+          Actions:
+            - quicksight:DescribeDataSource
+            - quicksight:DescribeDataSourcePermissions
+            - quicksight:PassDataSource
+            - quicksight:UpdateDataSource
+            - quicksight:DeleteDataSource
+            - quicksight:UpdateDataSourcePermissions
+
+  # QuickSight Dataset
+  CostDataset:
+    Type: AWS::QuickSight::DataSet
+    DependsOn: CostDataSource
+    Properties:
+      AwsAccountId: !Ref AWS::AccountId
+      DataSetId: !Sub "aws-cost-dataset-${EnvironmentName}"
+      Name: !Sub "AWS Cost Data ${EnvironmentName}"
+      PhysicalTableMap:
+        CostTable:
+          RelationalTable:
+            DataSourceArn: !GetAtt CostDataSource.Arn
+            Catalog: AwsDataCatalog
+            Name: !Ref AthenaTableName
+            Schema: !Ref AthenaDatabaseName
+      ImportMode: SPICE
+      Permissions:
+        - Principal: !Ref QuickSightUserArn
+          Actions:
+            - quicksight:DescribeDataSet
+            - quicksight:DescribeDataSetPermissions
+            - quicksight:PassDataSet
+            - quicksight:DescribeIngestion
+            - quicksight:ListIngestions
+            - quicksight:UpdateDataSet
+            - quicksight:DeleteDataSet
+            - quicksight:CreateIngestion
+            - quicksight:UpdateDataSetPermissions
+
+  # QuickSight Dashboard
+  CostDashboard:
+    Type: AWS::QuickSight::Dashboard
+    DependsOn: CostDataset
+    Properties:
+      AwsAccountId: !Ref AWS::AccountId
+      DashboardId: !Sub "aws-cost-dashboard-${EnvironmentName}"
+      Name: !Sub "AWS Cost Dashboard ${EnvironmentName}"
+      SourceEntity:
+        SourceTemplate:
+          Arn: !Sub "arn:aws:quicksight:us-east-1:${AWS::AccountId}:template/aws-cost-template"
+          DataSetReferences:
+            - DataSetArn: !GetAtt CostDataset.Arn
+              DataSetPlaceholder: "AWS_Cost_Data"
+      Permissions:
+        - Principal: !Ref QuickSightUserArn
+          Actions:
+            - quicksight:DescribeDashboard
+            - quicksight:ListDashboardVersions
+            - quicksight:UpdateDashboardPermissions
+            - quicksight:QueryDashboard
+            - quicksight:UpdateDashboard
+            - quicksight:DeleteDashboard
+            - quicksight:DescribeDashboardPermissions
+            - quicksight:UpdateDashboard
+            - quicksight:GetDashboardEmbedUrl
+
+Outputs:
+  DashboardId:
+    Description: ID of the QuickSight dashboard
+    Value: !Ref CostDashboard
